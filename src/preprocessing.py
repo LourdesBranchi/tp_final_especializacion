@@ -7,25 +7,25 @@ def resize_con_padding(arr, size=256, es_mascara=False):
     Redimensiona a un cuadrado de `size`x`size` SIN distorsionar la relación
     de aspecto: escala manteniendo proporciones y agrega padding (relleno)
     en vez de estirar la imagen.
-
-    Por qué: el EDA de dimensiones mostró que la relación de aspecto real de
-    CAMUS es mayoritariamente ~1.2, no 1:1. Un resize directo a 256x256
-    (lo que hacía VPC II) distorsiona la geometría de la mayoría de las
-    imágenes y máscaras.
-
-    es_mascara: True para máscaras de segmentación (usa interpolación
-                'nearest' para no promediar valores de clase, y rellena
-                con 0 = clase fondo). False para imágenes (interpolación
-                bilineal, rellena con negro).
     """
     alto, ancho = arr.shape
     escala = size / max(alto, ancho)
     nuevo_alto = int(round(alto * escala))
     nuevo_ancho = int(round(ancho * escala))
 
-    interpolacion = Image.NEAREST if es_mascara else Image.BILINEAR
+    if es_mascara:
+        # PIL no soporta arrays int64 (el error que viste: "Cannot handle
+        # this data type: (1, 1), <i8"). Las máscaras solo tienen valores
+        # 0-3, así que uint8 alcanza de sobra para el resize -- el cast a
+        # int64 final para PyTorch se hace después, en CamusDataset.
+        arr_para_resize = arr.astype(np.uint8)
+        interpolacion = Image.NEAREST
+    else:
+        arr_para_resize = arr
+        interpolacion = Image.BILINEAR
+
     img_resized = np.array(
-        Image.fromarray(arr).resize((nuevo_ancho, nuevo_alto), interpolacion)
+        Image.fromarray(arr_para_resize).resize((nuevo_ancho, nuevo_alto), interpolacion)
     )
 
     pad_alto = size - nuevo_alto
